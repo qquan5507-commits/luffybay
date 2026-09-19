@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <base href="./">
+    <title>LUFFY BAY — Boss Bắn Đạn 🏴‍☠️</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(180deg, #87CEEB 0%, #1E90FF 100%);
+            display: flex; justify-content: center; align-items: center;
+            min-height: 100vh; font-family: Arial, sans-serif; overflow: hidden;
+            touch-action: none;
+        }
+        #gameCanvas {
+            background: linear-gradient(180deg, #87CEEB 0%, #4169E1 50%, #1E90FF 100%);
+            border: 4px solid #8B4513; border-radius: 12px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.3);
+            max-width: 100%; max-height: 100vh;
+        }
+        .ui { position: absolute; color: white; font-weight: bold;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5); text-align: center; }
+        #startScreen, #gameOverScreen, #formScreen, #leaderboardScreen, #bossAlert {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            color: white; text-align: center; font-size: 16px;
+            text-shadow: 3px 3px 6px rgba(0,0,0,0.7); z-index: 10;
+            width: 94%; background: rgba(0,0,0,0.85); padding: 15px;
+            border-radius: 20px; border: 3px solid #FFD700; max-height: 90vh; overflow-y: auto;
+        }
+        #bossAlert {
+            background: rgba(139, 0, 0, 0.9);
+            border-color: #FF4500;
+            animation: pulse 0.5s ease-in-out infinite alternate;
+            pointer-events: none;
+        }
+        @keyframes pulse {
+            from { box-shadow: 0 0 20px #FF4500; }
+            to { box-shadow: 0 0 40px #FF0000; }
+        }
+        #startScreen h1, #gameOverScreen h2, #formScreen h2, #leaderboardScreen h2 { 
+            font-size: 24px; margin-bottom: 10px; color: #FFD700; }
+        #scoreDisplay { position: absolute; top: 15px; left: 15px; font-size: 20px; }
+        #highScoreDisplay { position: absolute; top: 15px; right: 15px; font-size: 14px; }
+        #formDisplay { position: absolute; top: 50px; left: 15px; font-size: 14px; color: #FFD700; text-shadow: 0 0 5px #FFD700; }
+        #bossTimer { position: absolute; top: 85px; left: 50%; transform: translateX(-50%);
+            font-size: 22px; color: #FF4500; text-shadow: 0 0 8px #FF0000; display: none; }
+        #musicBtn { position: absolute; top: 15px; left: 50%; transform: translateX(-50%);
+            font-size: 24px; pointer-events: auto; cursor: pointer; background: rgba(0,0,0,0.5);
+            border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center;
+            justify-content: center; border: 2px solid #FFD700; }
+        
+        .char-container, .form-container { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin: 10px 0; pointer-events: auto; }
+        .char-btn, .form-btn { padding: 10px 12px; background: rgba(65,105,225,0.5); border: 2px solid #fff;
+            border-radius: 10px; cursor: pointer; transition: all 0.2s; font-size: 13px; color: white;
+            display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 80px; }
+        .char-icon, .form-icon { width: 40px; height: 40px; object-fit: contain; }
+        .char-btn.selected, .form-btn.selected { background: rgba(255,215,0,0.6); border-color: #FFD700; transform: scale(1.05); }
+        .char-btn.locked, .form-btn.locked { opacity: 0.5; cursor: not-allowed; }
+        
+        .action-btn { margin-top: 8px; padding: 10px 20px; background: linear-gradient(90deg, #FFD700, #FFA500);
+            color: #000; font-size: 16px; font-weight: bold; border: none; border-radius: 10px;
+            cursor: pointer; pointer-events: auto; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            width: 85%; max-width: 280px; margin: 8px auto; display: block; }
+        .action-btn:active { transform: scale(0.95); }
+        .secondary-btn { background: linear-gradient(90deg, #4169E1, #1E90FF); color: white; font-size: 15px; padding: 8px 16px; }
+        .hidden { display: none !important; }
+        input { padding: 8px; font-size: 16px; border-radius: 8px; border: none; width: 85%; max-width: 260px; text-align: center; margin: 8px 0; pointer-events: auto; }
+        .status-msg { font-size: 13px; margin-top: 5px; color: #90EE90; }
+        .leaderboard-row { display: flex; justify-content: space-between; padding: 6px 10px; border-bottom: 1px solid #444; font-size: 14px; }
+        .leaderboard-row:nth-child(1) { color: #FFD700; font-weight: bold; }
+        .leaderboard-row:nth-child(2) { color: #C0C0C0; }
+        .leaderboard-row:nth-child(3) { color: #CD7F32; }
+
+        .screen-shake { animation: shake 0.3s ease-in-out; }
+        @keyframes shake {
+            0% { transform: translateX(0); } 20% { transform: translateX(-8px); } 40% { transform: translateX(8px); }
+            60% { transform: translateX(-6px); } 80% { transform: translateX(6px); } 100% { transform: translateX(0); }
+        }
+    </style>
+</head>
+<body>
+    <div id="gameWrapper">
+        <canvas id="gameCanvas"></canvas>
+    </div>
+    <div id="scoreDisplay" class="ui">Điểm: 0</div>
+    <div id="highScoreDisplay" class="ui">Cao nhất: 0</div>
+    <div id="formDisplay" class="ui hidden"></div>
+    <div id="bossTimer" class="ui">⏱️ BOSS: 5s</div>
+    <div id="musicBtn">🔊</div>
+
+    <div id="bossAlert" class="ui hidden">
+        <h2 id="bossName">⚠️ BOSS ĐẾN!</h2>
+        <p id="bossDesc">Né đạn trong 5 giây...</p>
+    </div>
+
+    <div id="startScreen" class="ui">
+        <h1>🏴‍☠️ LUFFY BAY</h1>
+        <input type="text" id="playerNameInput" placeholder="✍️ Nhập tên của bạn" />
+        <div id="saveStatus" class="status-msg"></div>
+        <p style="margin:8px 0 4px; font-size:14px;">Chọn nhân vật:</p>
+        <div class="char-container" id="charContainer"></div>
+        <button id="nextToFormBtn" class="action-btn">➡ CHỌN HÌNH THỂ</button>
+        <button id="showLeaderboardBtn" class="action-btn secondary-btn">🏆 BẢNG XẾP HẠNG</button>
+    </div>
+
+    <div id="formScreen" class="ui hidden">
+        <h2>🎭 CHỌN HÌNH THỂ</h2>
+        <p id="selectedCharName"></p>
+        <div class="form-container" id="formContainer"></div>
+        <button id="backToCharBtn" class="action-btn secondary-btn">⬅ Quay lại</button>
+        <button id="startBtn" class="action-btn">🎮 BẮT ĐẦU CHƠI</button>
+    </div>
+
+    <div id="leaderboardScreen" class="ui hidden">
+        <h2>🏆 BẢNG XẾP HẠNG</h2>
+        <div id="leaderboardContent">Đang tải...</div>
+        <button id="closeLeaderboardBtn" class="action-btn">⬅ Đóng</button>
+    </div>
+
+    <div id="gameOverScreen" class="ui hidden">
+        <h2>💀 KẾT THÚC GAME!</h2>
+        <p id="finalScore"></p>
+        <p id="cloudStatus" style="font-size:14px; margin-top:8px;"></p>
+        <br>
+        <button id="backToSelectBtn" class="action-btn">🔄 Chọn lại nhân vật</button>
+        <button id="quickRestartBtn" class="action-btn secondary-btn">▶️ Chơi lại nhanh</button>
+    </div>
+
+    <script>
+        // =============================================================
+        // 🖼️ TẢI TẤT CẢ ẢNH TỪ THƯ MỤC CỦA BẠN
+        // =============================================================
+        const IMG = {};
+        const IMG_LIST = {
+            // Nhân vật
+            char_luffy: 'char_luffy.png',
+            char_zoro: 'char_zoro.png',
+            char_nami: 'char_nami.png',
+            char_sanji: 'char_sanji.png',
+            char_chopper: 'char_chopper.png',
+            
+            // Hình thể Luffy
+            luffy_base: 'Luffy.png',
+            luffy_gear2: 'luffy_gear2.png',
+            luffy_gear3: 'luffy_gear3.png',
+            luffy_gear4: 'luffy_gear4.png',
+            luffy_gear5: 'luffy_gear5.png',
+            
+            // Hình thể Zoro
+            zoro_base: 'char_zoro.png',
+            zoro_enhanced: 'zoro_enhanced.png',
+            zoro_threeSwords: 'zoro_threeSwords.png',
+            
+            // Hình thể Nami
+            nami_base: 'char_nami.png',
+            nami_weather: 'nami_weather.png',
+            nami_cloud: 'nami_cloud.png',
+            
+            // Hình thể Sanji
+            sanji_base: 'char_sanji.png',
+            sanji_diable: 'sanji_diable.png',
+            sanji_ifrit: 'sanji_ifrit.png',
+            
+            // Hình thể Chopper
+            chopper_base: 'char_chopper.png',
+            chopper_brain: 'chopper_brain.png',
+            chopper_heavy: 'chopper_heavy.png',
+            chopper_monster: 'chopper_monster.png',
+            
+            // Vật cản
+            obs_island: 'obs_island.png',
+            obs_ship: 'obs_ship.png',
+            obs_chest: 'obs_chest.png',
+            obs_rock: 'obs_rock.png',
+            obs_reef: 'obs_reef.png',
+            
+            // Vật phẩm
+            item_meat: 'item_meat.png',
+            item_gem: 'item_gem.png',
+            item_energy: 'item_energy.png',
+            item_compass: 'item_compass.png',
+            item_orange: 'item_orange.png',
+            
+            // Boss
+            boss_default: 'char_luffy.png'
+        };
+
+        // Tải ảnh tự động
+        let imagesLoaded = 0;
+        const totalImages = Object.keys(IMG_LIST).length;
+        function loadImages(callback) {
+            Object.entries(IMG_LIST).forEach(([key, src]) => {
+                IMG[key] = new Image();
+                IMG[key].src = src;
+                IMG[key].onload = IMG[key].onerror = () => {
+                    imagesLoaded++;
+                    if (imagesLoaded >= totalImages && callback) callback();
+                };
+            });
+        }
+
+        // =============================================================
+        // ⚠️ DÁN URL APPSCRIPT GOOGLE SHEETS CỦA BẠN VÀO ĐÂY!
+        // =============================================================
+        const APPSCRIPT_URL = "";
+
+        // =============================================================
+        // 📊 GOOGLE SHEETS
+        // =============================================================
+        async function saveScoreToSheets(playerName, highScore, character, form) {
+            if (!APPSCRIPT_URL) return false;
+            try {
+                await fetch(APPSCRIPT_URL, {
+                    method: "POST", mode: "no-cors",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ playerName, highScore, character, form })
+                });
+                showStatus("☁️ Đã lưu điểm!", "#90EE90");
+                return true;
+            } catch (error) {
+                showStatus("⚠️ Lỗi lưu: " + error.message, "#FFA500");
+                return false;
+            }
+        }
+        async function loadLeaderboard() {
+            if (!APPSCRIPT_URL) return [["Chưa cấu hình", 0, "-", "-"]];
+            try {
+                const res = await fetch(APPSCRIPT_URL + "?action=leaderboard");
+                const data = JSON.parse(await res.text());
+                return data.success ? data.leaderboard : [];
+            } catch (e) { return [["Lỗi tải dữ liệu", 0, "-", "-"]]; }
+        }
+        function showStatus(text, color="#fff") {
+            const el = document.getElementById("saveStatus");
+            el.textContent = text; el.style.color = color;
+        }
+
+        // =============================================================
+        // 👤 HỆ THỐNG HÌNH THỂ & NHÂN VẬT — LIÊN KẾT ẢNH
+        // =============================================================
+        const FORMS = {
+            base: { name: 'Thường', imgKey: null, scale: 1, effect: null, unlockScore: 0 },
+            gear2: { name: 'Gear 2', imgKey: 'luffy_gear2', scale: 1.05, effect: 'speedUp', unlockScore: 30, desc: '+5% điểm' },
+            gear3: { name: 'Gear 3', imgKey: 'luffy_gear3', scale: 1.3, effect: 'hitExpand', unlockScore: 60, desc: '+10% điểm' },
+            gear4: { name: 'Gear 4', imgKey: 'luffy_gear4', scale: 1.2, effect: 'bounce', unlockScore: 100, desc: '+15% điểm' },
+            gear5: { name: 'Gear 5', imgKey: 'luffy_gear5', scale: 1.25, effect: 'godMode', unlockScore: 200, desc: '+25% điểm' },
+            enhanced: { name: 'Tăng cường', imgKey: 'zoro_enhanced', scale: 1.05, effect: 'precision', unlockScore: 50, desc: '+10% điểm' },
+            threeSwords: { name: 'Tam Kiếm', imgKey: 'zoro_threeSwords', scale: 1.1, effect: 'slashShield', unlockScore: 120, desc: '+20% điểm' },
+            weatherExpert: { name: 'Thời tiết', imgKey: 'nami_weather', scale: 1, effect: 'slowField', unlockScore: 60, desc: '+12% điểm' },
+            cloudControl: { name: 'Điều khiển mây', imgKey: 'nami_cloud', scale: 1.05, effect: 'cloudJump', unlockScore: 150, desc: '+20% điểm' },
+            diable: { name: 'Chân Lửa', imgKey: 'sanji_diable', scale: 1.1, effect: 'fireAura', unlockScore: 70, desc: '+15% điểm' },
+            ifrit: { name: 'Ifrit', imgKey: 'sanji_ifrit', scale: 1.15, effect: 'hellPower', unlockScore: 180, desc: '+25% điểm' },
+            heavy: { name: 'Nặng', imgKey: 'chopper_heavy', scale: 1.25, effect: 'toughBody', unlockScore: 50, desc: 'Miễn 1 lần' },
+            brain: { name: 'Trí tuệ', imgKey: 'chopper_brain', scale: 0.95, effect: 'predictGap', unlockScore: 80, desc: 'Khoảng trống rộng' },
+            monster: { name: 'Quái vật', imgKey: 'chopper_monster', scale: 1.4, effect: 'fullPower', unlockScore: 160, desc: '+30% điểm' }
+        };
+
+        const characterConfig = {
+            luffy: { name: 'Luffy', baseImg: 'luffy_base', iconImg: 'char_luffy', unlockScore: 0,
+                forms: ['base', 'gear2', 'gear3', 'gear4', 'gear5'] },
+            zoro: { name: 'Zoro', baseImg: 'zoro_base', iconImg: 'char_zoro', unlockScore: 20,
+                forms: ['base', 'enhanced', 'threeSwords'] },
+            nami: { name: 'Nami', baseImg: 'nami_base', iconImg: 'char_nami', unlockScore: 30,
+                forms: ['base', 'weatherExpert', 'cloudControl'] },
+            sanji: { name: 'Sanji', baseImg: 'sanji_base', iconImg: 'char_sanji', unlockScore: 50,
+                forms: ['base', 'diable', 'ifrit'] },
+            chopper: { name: 'Chopper', baseImg: 'chopper_base', iconImg: 'char_chopper', unlockScore: 40,
+                forms: ['base', 'heavy', 'brain', 'monster'] }
+        };
+
+        // =============================================================
+        // 🪨 VẬT CẢN — DÙNG ẢNH
+        // =============================================================
+        const OBSTACLE_TYPES = [
+            { id: 'island', name: 'Đảo', imgKey: 'obs_island' },
+            { id: 'ship', name: 'Thuyền', imgKey: 'obs_ship' },
+            { id: 'chest', name: 'Rương vàng', imgKey: 'obs_chest' },
+            { id: 'rock', name: 'Tảng đá', imgKey: 'obs_rock' },
+            { id: 'reef', name: 'Biển đá', imgKey: 'obs_reef' }
+        ];
+
+        // =============================================================
+        // 👹 HỆ THỐNG BOSS — ĐỨNG YÊN BẮN ĐẠN 5 GIÂY
+        // =============================================================
+        const BOSS_CONFIG = [
+            { milestone: 10, name: 'TÀU HẢI TẶC', imgKey: 'obs_ship', bulletSpeed: 4, fireRate: 60, bulletSize: 10 },
+            { milestone: 20, name: 'RỒNG BIỂN', imgKey: 'obs_reef', bulletSpeed: 5, fireRate: 50, bulletSize: 12 },
+            { milestone: 30, name: 'TÀU ĐÔ ĐỐC', imgKey: 'obs_ship', bulletSpeed: 5, fireRate: 45, bulletSize: 12 },
+            { milestone: 40, name: 'TƯỜNG ĐÁ', imgKey: 'obs_rock', bulletSpeed: 6, fireRate: 40, bulletSize: 14 },
+            { milestone: 50, name: 'BOSS SIÊU CẤP', imgKey: 'luffy_gear5', bulletSpeed: 7, fireRate: 35, bulletSize: 14 }
+        ];
+
+        let bossState = 'idle';
+        let currentBossConfig = null;
+        let bossEndTime = 0;
+        let bossX = 0;
+        let bossY = 0;
+        let bossBullets = [];
+        let lastBossMilestone = -1;
+        const BOSS_DURATION = 5000;
+
+        function checkBossMilestone() {
+            const milestone = Math.floor(score / 10);
+            if (milestone > lastBossMilestone && score > 0 && bossState === 'idle') {
+                lastBossMilestone = milestone;
+                startBoss();
+            }
+        }
+
+        function startBoss() {
+            const level = Math.min(lastBossMilestone - 1, BOSS_CONFIG.length - 1);
+            currentBossConfig = BOSS_CONFIG[Math.max(0, level)];
+            bossState = 'active';
+            bossEndTime = Date.now() + BOSS_DURATION;
+            bossBullets = [];
+            
+            bossX = canvas.width - 70;
+            bossY = canvas.height / 2;
+            obstacles = [];
+            
+            const alert = document.getElementById('bossAlert');
+            document.getElementById('bossName').textContent = `⚠️ ${currentBossConfig.name}`;
+            document.getElementById('bossDesc').textContent = 'Né đạn trong 5 giây!';
+            alert.classList.remove('hidden');
+            document.getElementById('bossTimer').style.display = 'block';
+            
+            AudioSystem.bossAlert();
+            setTimeout(() => alert.classList.add('hidden'), 2000);
+        }
+
+        function endBoss() {
+            bossState = 'idle';
+            currentBossConfig = null;
+            bossBullets = [];
+            document.getElementById('bossTimer').style.display = 'none';
+        }
+
+        class BossBullet {
+            constructor(x, y, tx, ty, speed, size) {
+                this.x = x; this.y = y;
+                const dx = tx - x;
+                const dy = ty - y;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                this.vx = (dx / dist) * speed;
+                this.vy = (dy / dist) * speed;
+                this.size = size;
+                this.active = true;
+            }
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                if (this.x < -50 || this.x > canvas.width + 50 || 
+                    this.y < -50 || this.y > canvas.height + 50) {
+                    this.active = false;
+                }
+            }
+            draw() {
+                ctx.fillStyle = '#FF4500';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#FFFF00';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+            checkCollision(b) {
+                const cx = this.x, cy = this.y;
+                const r = this.size;
+                return cx + r > b.x && cx - r < b.x + b.w &&
+                       cy + r > b.y && cy - r < b.y + b.h;
+            }
+        }
+
+        function updateBoss() {
+            if (bossState !== 'active') return;
+            
+            const remaining = Math.ceil((bossEndTime - Date.now()) / 1000);
+            document.getElementById('bossTimer').textContent = `⏱️ BOSS: ${remaining}s`;
+            
+            if (Date.now() >= bossEndTime) {
+                endBoss();
+                return;
+            }
+            
+            if (frameCount % currentBossConfig.fireRate === 0) {
+                const b = player.getBounds();
+                const tx = b.x + b.w/2;
+                const ty = b.y + b.h/2;
+                bossBullets.push(new BossBullet(
+                    bossX, bossY, tx, ty,
+                    currentBossConfig.bulletSpeed,
+                    currentBossConfig.bulletSize
+                ));
+                AudioSystem.shoot();
+            }
+            
+            bossBullets = bossBullets.filter(b => {
+                b.update();
+                if (!b.active) return false;
+                if (b.checkCollision(player.getBounds())) {
+                    if (canTakeDamage()) {
+                        player.hit();
+                        return false;
+                    } else {
+                        loseShield();
+                        return false;
+                    }
+                }
+                return true;
+            });
+        }
+
+        function drawBoss() {
+            if (bossState !== 'active') return;
+            
+            const img = IMG[currentBossConfig.imgKey] || IMG.char_luffy;
+            if (img && img.complete && img.naturalWidth > 0) {
+                const size = 64;
+                ctx.drawImage(img, bossX - size/2, bossY - size/2, size, size);
+            } else {
+                ctx.font = '48px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('👹', bossX, bossY);
+            }
+            
+            bossBullets.forEach(b => b.draw());
+        }
+
+        // =============================================================
+        // 🎁 VẬT PHẨM — DÙNG ẢNH
+        // =============================================================
+        const POWERUP_TYPES = [
+            { id: 'meat', imgKey: 'item_meat', name: 'Thịt', desc: 'Bất tử 5s', duration: 5000, effect: 'invincible' },
+            { id: 'gem', imgKey: 'item_gem', name: 'Ngọc', desc: 'Chậm 50%', duration: 6000, effect: 'slowObstacles' },
+            { id: 'energy', imgKey: 'item_energy', name: 'Năng lượng', desc: 'Điểm x2', duration: 5000, effect: 'doubleScore' },
+            { id: 'compass', imgKey: 'item_compass', name: 'La bàn', desc: 'Khoảng trống rộng', duration: 0, effect: 'wideGap' },
+            { id: 'orange', imgKey: 'item_orange', name: 'Cam Nami', desc: 'Chặn 1 lần', duration: 0, effect: 'shield' }
+        ];
+
+        // =============================================================
+        // 🎵 ÂM THANH
+        // =============================================================
+        const AudioSystem = {
+            enabled: true, ctx: null,
+            init() { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch(e) { this.enabled = false; } },
+            playTone(freq, dur, vol, type) {
+                vol = vol || 0.3; type = type || 'sine';
+                if (!this.enabled || !this.ctx) return;
+                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.frequency.value = freq; osc.type = type;
+                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + dur);
+                osc.start(this.ctx.currentTime); osc.stop(this.ctx.currentTime + dur);
+            },
+            jump() { this.playTone(440, 0.1); setTimeout(()=>this.playTone(523, 0.1), 50); },
+            score() { this.playTone(523, 0.1); setTimeout(()=>this.playTone(659, 0.15), 80); setTimeout(()=>this.playTone(784, 0.2), 160); },
+            hit() { this.playTone(120, 0.3, 0.4, 'sawtooth'); },
+            gameover() { this.playTone(320, 0.3); setTimeout(()=>this.playTone(220, 0.4), 200); setTimeout(()=>this.playTone(110, 0.6), 400); },
+            newRecord() { [523,659,784,1047].forEach((f,i)=>setTimeout(()=>this.playTone(f,0.2),i*120)); },
+            powerup() { this.playTone(600, 0.1); setTimeout(()=>this.playTone(800, 0.15), 100); },
+            transform() { this.playTone(400, 0.1); setTimeout(()=>this.playTone(600, 0.1), 80); },
+            bossAlert() { [220, 165, 220, 330].forEach((f,i)=>setTimeout(()=>this.playTone(f,0.25),i*150)); },
+            shoot() { this.playTone(200, 0.08, 0.2, 'square'); },
+            shieldBlock() { this.playTone(880, 0.15, 0.3, 'triangle'); }
+        };
+
+        // =============================================================
+        // ⚙️ CẤU HÌNH CHUNG
+        // =============================================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const gameWrapper = document.getElementById('gameWrapper');
+
+        function resizeCanvas() {
+            const maxW = Math.min(420, window.innerWidth - 20);
+            const maxH = Math.min(680, window.innerHeight - 40);
+            canvas.width = maxW; canvas.height = maxH;
+        }
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
+
+        let gameState = 'start';
+        let score = 0;
+        let highScore = parseInt(localStorage.getItem('luffyHighScore')) || 0;
+        let selectedChar = 'luffy';
+        let selectedForm = 'base';
+        let baseSpeed = 3;
+        let frameCount = 0;
+        let obstacles = [];
+        let powerups = [];
+        let unlockedChars = JSON.parse(localStorage.getItem('luffyUnlocked')) || ['luffy'];
+        let activePowerup = null;
+        let powerupEndTime = 0;
+        let shieldActive = false;
+        let scoreMultiplier = 1;
+        let specialShieldUsed = false;
+        let lastSpecialShieldTime = 0;
+        let godModeActive = false;
+        let monsterFormActive = false;
+        let nextSpawnFrame = 80;
+        
+        const obstacleWidth = 70;
+        const obstacleHeight = 80;
+        const gapHeight = 180;
+
+        function canTakeDamage() {
+            if (activePowerup && activePowerup.effect === 'invincible') return false;
+            if (godModeActive || monsterFormActive) return false;
+            return true;
+        }
+        function loseShield() {
+            if (shieldActive) {
+                shieldActive = false;
+                AudioSystem.shieldBlock();
+            }
+        }
+
+        function getCurrentForm() { return FORMS[selectedForm] || FORMS.base; }
+        function getPlayerSize() { const f = getCurrentForm(); return { w: 44 * f.scale, h: 44 * f.scale }; }
+        function getScoreMultiplierFromForm() {
+            const f = getCurrentForm();
+            const effects = {
+                speedUp: 1.05, hitExpand: 1.10, bounce: 1.15, godMode: 1.25,
+                precision: 1.10, slashShield: 1.20, slowField: 1.12, cloudJump: 1.20,
+                fireAura: 1.15, hellPower: 1.25, toughBody: 1.00, predictGap: 1.15, fullPower: 1.30
+            };
+            return effects[f.effect] || 1.0;
+        }
+        function getSpeedModifierFromForm() { 
+            const f = getCurrentForm(); 
+            return (f.effect === 'slowField' || f.effect === 'fireAura') ? 0.85 : 1.0; 
+        }
+        function getJumpForceFromForm() { 
+            const f = getCurrentForm(); 
+            return (f.effect === 'bounce' || f.effect === 'cloudJump') ? -10.5 : -9; 
+        }
+        function getSpecialShieldCooldown() { 
+            const f = getCurrentForm(); 
+            if (f.effect === 'slashShield') return 40000;
+            if (f.effect === 'hellPower') return 35000;
+            return 0; 
+        }
+
+        // HIỆU ỨNG GIÓ
+        let windParticles = [];
+        function addWindParticle(x, y) {
+            windParticles.push({
+                x: x, y: y + (Math.random() - 0.5) * 20,
+                vx: -3 - Math.random() * 3, size: 2 + Math.random() * 4,
+                alpha: 0.6 + Math.random() * 0.4, life: 30
+            });
+        }
+        function updateWindParticles() {
+            windParticles = windParticles.filter(p => {
+                p.x += p.vx; p.life--; p.alpha -= 0.02;
+                ctx.fillStyle = `rgba(255,255,255,${p.alpha})`;
+                ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+                return p.life > 0;
+            });
+        }
+
+        // VẼ NHÂN VẬT BẰNG ẢNH THẬT
+        function drawCharacter(x, y, w, h, vel, charType, formType) {
+            const form = FORMS[formType];
+            const char = characterConfig[charType];
+            
+            // Chọn ảnh: có ảnh riêng của form → dùng; không → dùng ảnh cơ sở nhân vật
+            let img;
+            if (form.imgKey && IMG[form.imgKey] && IMG[form.imgKey].complete && IMG[form.imgKey].naturalWidth > 0) {
+                img = IMG[form.imgKey];
+            } else if (IMG[char.baseImg] && IMG[char.baseImg].complete && IMG[char.baseImg].naturalWidth > 0) {
+                img = IMG[char.baseImg];
+            } else {
+                ctx.font = `${w * 0.7}px Arial`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText('❓', x + w/2, y + h/2);
+                return;
+            }
+            
+            ctx.save();
+            ctx.translate(x + w / 2, y + h / 2);
+            ctx.rotate(Math.min(Math.PI / 4, vel * 0.05));
+            
+            // Vẽ ảnh
+            ctx.drawImage(img, -w/2, -h/2, w, h);
+            
+            // Hiệu ứng khi có khiên / đặc biệt
+            if (shieldActive || (specialShieldUsed && Date.now() - lastSpecialShieldTime < 3000)) {
+                ctx.strokeStyle = '#00FFFF';
+                ctx.lineWidth = 3;
+                ctx.beginPath();
+                ctx.arc(0, 0, w / 2 + 8, 0, Math.PI * 2);
+                ctx.stroke();
+            }
+            
+            if (godModeActive || monsterFormActive) {
+                ctx.strokeStyle = '#FFD700';
+                ctx.lineWidth = 2;
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath();
+                ctx.arc(0, 0, w / 2 + 12, 0, Math.PI * 2);
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+            
+            ctx.restore();
+        }
+
+        // NHÂN VẬT CHÍNH
+        const player = {
+            x: 80, y: 200, w: 44, h: 44, velocity: 0, gravity: 0.4,
+            
+            jump: function() {
+                if (gameState !== 'playing') return;
+                this.velocity = getJumpForceFromForm();
+                AudioSystem.jump();
+                for (let i = 0; i < 8; i++) addWindParticle(this.x, this.y + this.h / 2);
+            },
+            
+            update: function() {
+                const size = getPlayerSize();
+                this.w = size.w; this.h = size.h;
+                this.velocity += this.gravity;
+                this.y += this.velocity;
+                
+                if (this.y < 0) { this.y = 0; this.velocity = 0; }
+                if (this.y + this.h >= canvas.height) {
+                    this.y = canvas.height - this.h;
+                    if (canTakeDamage()) this.hit();
+                    else loseShield();
+                    return;
+                }
+                if (this.velocity > 2) addWindParticle(this.x, this.y + this.h / 2);
+            },
+            
+            hit: function() {
+                if (gameState !== 'playing') return;
+                const now = Date.now();
+                const cd = getSpecialShieldCooldown();
+                
+                if (!canTakeDamage()) return;
+                
+                if (cd > 0 && !specialShieldUsed) {
+                    specialShieldUsed = true;
+                    lastSpecialShieldTime = now;
+                    return;
+                }
+                if (cd > 0 && specialShieldUsed && now - lastSpecialShieldTime > cd) {
+                    specialShieldUsed = false;
+                    return;
+                }
+                if (shieldActive) { shieldActive = false; AudioSystem.shieldBlock(); return; }
+                
+                gameWrapper.classList.add('screen-shake');
+                setTimeout(() => gameWrapper.classList.remove('screen-shake'), 300);
+                gameOver();
+            },
+            
+            draw: function() {
+                drawCharacter(this.x, this.y, this.w, this.h, this.velocity, selectedChar, selectedForm);
+            },
+            
+            getBounds: function() {
+                return { x: this.x + 6, y: this.y + 6, w: this.w - 12, h: this.h - 12 };
+            }
+        };
+
+        // =============================================================
+        // ✅ CLASS VẬT CẢN — VẼ BẰNG ẢNH
+        // =============================================================
+        class Obstacle {
+            constructor() {
+                this.x = canvas.width;
+                this.w = obstacleWidth;
+                this.passed = false;
+                
+                const rand = Math.random();
+                if (rand < 0.4) this.count = 1;
+                else if (rand < 0.8) this.count = 2;
+                else this.count = 3;
+                
+                let gap = gapHeight;
+                if (getCurrentForm().effect === 'predictGap') gap *= 1.2;
+                if (activePowerup && activePowerup.effect === 'wideGap') gap *= 1.3;
+                
+                this.items = [];
+                const minY = 10;
+                const maxY = canvas.height - obstacleHeight - 10;
+                const availableH = maxY - minY;
+                
+                if (this.count === 1) {
+                    const randomY = minY + Math.random() * Math.max(1, availableH);
+                    this.items.push({
+                        y: Math.max(minY, Math.min(maxY, randomY)),
+                        type: OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)],
+                        moveVertical: Math.random() < 0.4,
+                        moveSpeed: (Math.random() * 1.2 + 0.4) * (Math.random() < 0.5 ? 1 : -1),
+                        moveRange: 25 + Math.random() * 30,
+                        baseY: 0
+                    });
+                    this.items[0].baseY = this.items[0].y;
+                    
+                } else if (this.count === 2) {
+                    const maxGapStart = Math.max(minY + 20, canvas.height - gap - obstacleHeight - 20);
+                    const gapStart = minY + 20 + Math.random() * Math.max(1, maxGapStart - minY - 20);
+                    
+                    const y1 = gapStart - obstacleHeight;
+                    this.items.push({
+                        y: Math.max(minY, Math.min(maxY, y1)),
+                        type: OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)],
+                        moveVertical: Math.random() < 0.3,
+                        moveSpeed: (Math.random() * 1.0 + 0.3) * (Math.random() < 0.5 ? 1 : -1),
+                        moveRange: 15 + Math.random() * 20,
+                        baseY: 0
+                    });
+                    
+                    const y2 = gapStart + gap;
+                    this.items.push({
+                        y: Math.max(minY, Math.min(maxY, y2)),
+                        type: OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)],
+                        moveVertical: Math.random() < 0.3,
+                        moveSpeed: (Math.random() * 1.0 + 0.3) * (Math.random() < 0.5 ? 1 : -1),
+                        moveRange: 15 + Math.random() * 20,
+                        baseY: 0
+                    });
+                    this.items.forEach(o => o.baseY = o.y);
+                    
+                } else {
+                    const sectionH = availableH / 3;
+                    for (let i = 0; i < 3; i++) {
+                        const sectionMin = minY + i * sectionH + 5;
+                        const sectionMax = minY + (i + 1) * sectionH - obstacleHeight - 5;
+                        const safeMax = Math.max(sectionMin + 1, sectionMax);
+                        const randomY = sectionMin + Math.random() * (safeMax - sectionMin);
+                        
+                        this.items.push({
+                            y: Math.max(minY, Math.min(maxY, randomY)),
+                            type: OBSTACLE_TYPES[Math.floor(Math.random() * OBSTACLE_TYPES.length)],
+                            moveVertical: Math.random() < 0.35,
+                            moveSpeed: (Math.random() * 1.0 + 0.3) * (Math.random() < 0.5 ? 1 : -1),
+                            moveRange: 15 + Math.random() * 20,
+                            baseY: 0
+                        });
+                        this.items[i].baseY = this.items[i].y;
+                    }
+                }
+            }
+            
+            update() {
+                let speed = baseSpeed + score * 0.03;
+                speed *= getSpeedModifierFromForm();
+                if (activePowerup && activePowerup.effect === 'slowObstacles') speed *= 0.5;
+                this.x -= speed;
+                
+                const minY = 10;
+                const maxY = canvas.height - obstacleHeight - 10;
+                
+                this.items.forEach(item => {
+                    if (item.moveVertical) {
+                        item.y += item.moveSpeed;
+                        if (item.y > item.baseY + item.moveRange) {
+                            item.y = item.baseY + item.moveRange;
+                            item.moveSpeed *= -1;
+                        }
+                        if (item.y < item.baseY - item.moveRange) {
+                            item.y = item.baseY - item.moveRange;
+                            item.moveSpeed *= -1;
+                        }
+                        if (item.y < minY) {
+                            item.y = minY;
+                            item.moveSpeed = Math.abs(item.moveSpeed);
+                        }
+                        if (item.y > maxY) {
+                            item.y = maxY;
+                            item.moveSpeed = -Math.abs(item.moveSpeed);
+                        }
+                    }
+                });
+            }
+            
+            drawSingle(item) {
+                const y = item.y;
+                const img = IMG[item.type.imgKey];
+                if (y + obstacleHeight < 0 || y > canvas.height) return;
+                
+                if (img && img.complete && img.naturalWidth > 0) {
+                    ctx.drawImage(img, this.x, y, this.w, obstacleHeight);
+                } else {
+                    ctx.fillStyle = '#8B4513';
+                    ctx.fillRect(this.x, y, this.w, obstacleHeight);
+                }
+                
+                if (item.moveVertical) {
+                    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+                    ctx.beginPath();
+                    ctx.arc(this.x + this.w / 2, y - 6, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.beginPath();
+                    ctx.arc(this.x + this.w / 2, y + obstacleHeight + 6, 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+            
+            draw() { this.items.forEach(item => this.drawSingle(item)); }
+            isOffScreen() { return this.x + this.w < -50; }
+            
+            checkCollision(b) {
+                for (const item of this.items) {
+                    if (this.checkSingle(b, item.y)) {
+                        if (canTakeDamage()) return true;
+                        else { loseShield(); return false; }
+                    }
+                }
+                return false;
+            }
+            
+            checkSingle(b, y) {
+                if (y + obstacleHeight < 0 || y > canvas.height) return false;
+                return b.x + b.w > this.x && b.x < this.x + this.w &&
+                       b.y + b.h > y && b.y < y + obstacleHeight;
+            }
+            
+            checkScore(px) {
+                if (!this.passed && px < this.x) {
+                    this.passed = true;
+                    return true;
+                }
+                return false;
+            }
+        }
+
+        // VẬT PHẨM — VẼ BẰNG ẢNH
+        class Powerup {
+            constructor() {
+                this.x = canvas.width;
+                this.y = 40 + Math.random() * (canvas.height - 120);
+                this.w = 35;
+                this.h = 35;
+                this.type = POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)];
+                this.collected = false;
+                this.bobPhase = Math.random() * Math.PI * 2;
+            }
+            
+            update
